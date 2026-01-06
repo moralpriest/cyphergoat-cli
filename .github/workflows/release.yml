@@ -26,13 +26,6 @@ jobs:
       - name: Run tests
         run: go test ./... -v -race
 
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.1
-          args: --timeout 5m
-        continue-on-error: true
-
   source:
     name: Create source tarball with SLSA provenance
     needs: test
