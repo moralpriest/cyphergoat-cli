@@ -56,7 +56,7 @@ For maximum security, build from source:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/moralpriest/cli.git
+git clone https://github.com/moralpriest/cyphergoat-cli.git
 cd cli
 
 # 2. Install Task (if not already installed)
