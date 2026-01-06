@@ -151,7 +151,7 @@ Fully supports privacy-focused cryptocurrencies:
 |------|--------|-------|
 | Monero | XMR | Most established privacy coin |
 | Pirate Chain | ARRR | Zero-knowledge protocol |
-| Dero | DERO | Privacy-focused blockchain |
+| Dero | DERO | Privacy-focused blockchain | (Pending)
 | Zcash | ZEC | Zero-knowledge proofs |
 | Wownero | WOW | Monero fork |
 | Firo | FIRO | Lelantus protocol |
@@ -264,7 +264,7 @@ MIT
 
 ## Resources
 
-- [Source Code](https://github.com/moralpriest/cli)
+- [Source Code](https://github.com/moralpriest/cyphergoat-cli)
 - [SLSA Framework](https://slsa.dev)
 - [Cosign](https://docs.sigstore.dev/cosign/overview)
 - [CoinGecko API](https://docs.coingecko.com/)
