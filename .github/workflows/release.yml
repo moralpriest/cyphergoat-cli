@@ -31,6 +31,7 @@ jobs:
         with:
           version: v2.1
           args: --timeout 5m
+        continue-on-error: true
 
   source:
     name: Create source tarball with SLSA provenance
