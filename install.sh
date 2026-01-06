@@ -20,13 +20,15 @@ if [ -w "${BIN_DIR}" ]; then
 
     rm -rf "${TMP_DIR}"
 
-echo "CypherGoat CLI has been successfully installed!"
-echo "Run '${BINARY_NAME}' to get started."
+    echo "CypherGoat CLI has been successfully installed!"
+    echo "Run '${BINARY_NAME}' to get started."
 else
     echo "Elevated permissions required to install to ${BIN_DIR}"
     sudo mv "${TMP_FILE}" "${BIN_DIR}/${BINARY_NAME}"
 
-        rm -rf "${TMP_DIR}"
+    rm -rf "${TMP_DIR}"
 
+    echo "CypherGoat CLI has been successfully installed!"
+    echo "Run '${BINARY_NAME}' to get started."
 fi
 

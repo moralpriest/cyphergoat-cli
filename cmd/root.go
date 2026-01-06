@@ -1,5 +1,5 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 CypherGoat <contact@cyphergoat.com>
 */
 package cmd
 
@@ -9,20 +9,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "cg",
-	Short: "CypherGoat CLI",
+	Use:   "cyphergoat",
+	Short: "CypherGoat CLI - Cryptocurrency swap tool",
 	Long: `CypherGoat CLI is a tool that helps you perform cryptocurrency swaps from the command line. 
 
-CypherGoat is an instant swap exchange aggreagator.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+CypherGoat is an instant swap exchange aggregator.`,
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+var verbose bool
+
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -31,13 +27,7 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cg.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose debug output")
+	rootCmd.AddCommand(NewVersionCmd())
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

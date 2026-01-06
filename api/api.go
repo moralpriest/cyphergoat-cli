@@ -1,29 +1,25 @@
 package api
 
 import (
-	"embed"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"net/url"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 const URL = "api.cyphergoat.com"
 
-//go:embed .env
-var envFile embed.FS
 var API_KEY string
 
 type Estimate struct {
 	ExchangeName  string  `json:"Exchange"`
 	ReceiveAmount float64 `json:"Amount"`
 	MinAmount     float64 `json:"MinAmount"`
+	KYCScore      int     `json:"KYCScore"`
 	Network1      string
 	Network2      string
 	Coin1         string
@@ -31,6 +27,7 @@ type Estimate struct {
 	SendAmount    float64
 	Address       string
 	ImageURL      string
+	TradeValueUSD float64
 }
 
 type TransactionResponse struct {
@@ -56,164 +53,147 @@ type Transaction struct {
 }
 
 func init() {
-	envData, err := envFile.ReadFile(".env")
-	if err != nil {
-		fmt.Println("Error reading embedded .env file")
-		return
-	}
-
-	envMap, err := godotenv.Unmarshal(string(envData))
-	if err != nil {
-		fmt.Println("Error unmarshalling .env file")
-		return
-	}
-
-	for key, value := range envMap {
-		os.Setenv(key, value)
-	}
-
-	API_KEY = os.Getenv("API_KEY")
+	API_KEY = GetAPIKeyFromEnv()
 }
 
-func SendRequest(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
+func GetAPIKeyFromEnv() string {
+	if key := os.Getenv("CYPHERGOAT_API_KEY"); key != "" {
+		return key
 	}
-
-	req.Header.Add("Authorization", "Bearer "+API_KEY)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var responseMap map[string]interface{}
-	err = json.Unmarshal(data, &responseMap)
-	if err != nil {
-		return nil, err
-	}
-
-	if errStr, ok := responseMap["error"].(string); ok {
-		return nil, fmt.Errorf("%s", errStr)
-	}
-
-	return data, nil
+	return os.Getenv("API_KEY")
 }
 
-func FetchEstimateFromAPI(coin1, coin2 string, amount float64, best bool, network1, network2 string) ([]Estimate, error) {
-	var url string
+func GetAPIKey() string {
+	return API_KEY
+}
+
+func FetchEstimateFromAPI(ctx context.Context, coin1, coin2 string, amount float64, best bool, network1, network2 string) ([]Estimate, error) {
+	params := url.Values{}
+	params.Set("coin1", coin1)
+	params.Set("coin2", coin2)
+	params.Set("amount", fmt.Sprintf("%f", amount))
+	params.Set("network1", network1)
+	params.Set("network2", network2)
 	if best {
-		url = fmt.Sprintf("https://%s/estimate?coin1=%s&coin2=%s&amount=%f&network1=%s&network2=%s&best=true", URL, coin1, coin2, amount, network1, network2)
-	} else {
-		url = fmt.Sprintf("https://%s/estimate?coin1=%s&coin2=%s&amount=%f&network1=%s&network2=%s&best=false", URL, coin1, coin2, amount, network1, network2)
+		params.Set("best", "true")
 	}
 
-	data, err := SendRequest(url)
+	requestURL := fmt.Sprintf("https://%s/estimate?%s", URL, params.Encode())
+
+	data, err := SendRequestWithContext(ctx, requestURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch estimate: %w", err)
 	}
 
-	var responseMap map[string]interface{}
-	err = json.Unmarshal(data, &responseMap)
-	if err != nil {
-		return nil, err
-	}
-
-	if errStr, ok := responseMap["error"].(string); ok {
-		return nil, fmt.Errorf("%s", errStr)
+	type RatesWrapper struct {
+		Results         []Estimate `json:"Results"`
+		Min             float64    `json:"Min"`
+		TradeValue_fiat float64    `json:"TradeValue_fiat"`
+		TradeValue_btc  float64    `json:"TradeValue_btc"`
 	}
 
 	type ApiResponse struct {
-		Rates []Estimate `json:"rates"`
+		Min   float64      `json:"min"`
+		Rates RatesWrapper `json:"rates"`
 	}
 
 	var result ApiResponse
-	err = json.Unmarshal(data, &result)
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal estimate response: %w", err)
+	}
+
+	priceService := NewPriceService()
+	coin2USDPrice, err := priceService.GetPrice(ctx, coin2)
 	if err != nil {
-		return nil, err
+		coin2USDPrice = 0
 	}
 
-	sort.Slice(result.Rates, func(i, j int) bool {
-		return result.Rates[i].ReceiveAmount > result.Rates[j].ReceiveAmount
-	})
-
-	for i := range result.Rates {
-		result.Rates[i].Coin1 = coin1
-		result.Rates[i].Coin2 = coin2
-		result.Rates[i].SendAmount = amount
-		result.Rates[i].Network1 = network1
-		result.Rates[i].Network2 = network2
-	}
-
-	return result.Rates, nil
+	estimates := populateEstimates(result.Rates.Results, coin1, coin2, amount, network1, network2, coin2USDPrice)
+	return estimates, nil
 }
 
-func CreateTradeFromAPI(coin1, coin2 string, amount float64, address, partner string, network1, network2 string) (error, Transaction) {
-	url := fmt.Sprintf("https://%s/swap?coin1=%s&coin2=%s&amount=%f&partner=%s&address=%s&network1=%s&network2=%s", URL, coin1, coin2, amount, partner, address, network1, network2)
+func populateEstimates(estimates []Estimate, coin1, coin2 string, amount float64, network1, network2 string, coin2USDPrice float64) []Estimate {
+	for i := range estimates {
+		estimates[i].Coin1 = coin1
+		estimates[i].Coin2 = coin2
+		estimates[i].SendAmount = amount
+		estimates[i].Network1 = network1
+		estimates[i].Network2 = network2
+		estimates[i].TradeValueUSD = estimates[i].ReceiveAmount * coin2USDPrice
+	}
+	slices.SortFunc(estimates, func(a, b Estimate) int {
+		if a.ReceiveAmount > b.ReceiveAmount {
+			return -1
+		}
+		if a.ReceiveAmount < b.ReceiveAmount {
+			return 1
+		}
+		return 0
+	})
+	return estimates
+}
 
-	data, err := SendRequest(url)
+func CreateTradeFromAPI(ctx context.Context, coin1, coin2 string, amount float64, address, partner string, network1, network2 string) (Transaction, error) {
+	params := url.Values{}
+	params.Set("coin1", coin1)
+	params.Set("coin2", coin2)
+	params.Set("amount", fmt.Sprintf("%f", amount))
+	params.Set("partner", partner)
+	params.Set("address", address)
+	params.Set("network1", network1)
+	params.Set("network2", network2)
+
+	requestURL := fmt.Sprintf("https://%s/swap?%s", URL, params.Encode())
+
+	data, err := SendRequestWithContext(ctx, requestURL)
 	if err != nil {
-		return err, Transaction{}
+		return Transaction{}, fmt.Errorf("failed to create trade: %w", err)
 	}
 
 	var result TransactionResponse
-
-	err = json.Unmarshal([]byte(data), &result)
-	if err != nil {
-		fmt.Println("Error unmarshalling JSON:", err)
-		return err, Transaction{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return Transaction{}, fmt.Errorf("failed to unmarshal trade response: %w", err)
 	}
 
 	transaction := result.Transaction
-	fmt.Printf("Transaction: %+v\n", transaction)
-	return nil, transaction
+	return transaction, nil
 }
 
-func TrackTxFromAPI(t Transaction) (error, Transaction) {
-	url := fmt.Sprintf("https://%s/transaction?id=%s", URL, strings.ToLower(t.Provider), t.Id)
-	data, err := SendRequest(url)
+func TrackTxFromAPI(ctx context.Context, t Transaction) (Transaction, error) {
+	requestURL := fmt.Sprintf("https://%s/transaction?id=%s", URL, strings.ToLower(t.Provider))
+
+	data, err := SendRequestWithContext(ctx, requestURL)
 	if err != nil {
-		return err, t
+		return t, fmt.Errorf("failed to track transaction: %w", err)
 	}
 
-	var responseMap map[string]interface{}
-	err = json.Unmarshal(data, &responseMap)
-	if err != nil {
-		return err, t
+	var responseMap map[string]any
+	if err := json.Unmarshal(data, &responseMap); err != nil {
+		return t, fmt.Errorf("failed to unmarshal track response: %w", err)
 	}
 
 	status, ok := responseMap["status"].(string)
 	if !ok {
-		return fmt.Errorf("status field is missing or not a string"), Transaction{}
-
+		return t, fmt.Errorf("status field is missing or not a string")
 	}
 	t.Status = status
 
-	return nil, t
-
+	return t, nil
 }
 
-func GetTransactionFromAPI(id string) (error, Transaction) {
-	url := fmt.Sprintf("https://%s/transaction?id=%s", URL, id)
-	data, err := SendRequest(url)
+func GetTransactionFromAPI(ctx context.Context, id string) (Transaction, error) {
+	requestURL := fmt.Sprintf("https://%s/transaction?id=%s", URL, id)
+
+	data, err := SendRequestWithContext(ctx, requestURL)
 	if err != nil {
-		return err, Transaction{}
+		return Transaction{}, fmt.Errorf("failed to get transaction: %w", err)
 	}
 
 	var result map[string]Transaction
-	err = json.Unmarshal(data, &result)
-	if err != nil {
-		return err, Transaction{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return Transaction{}, fmt.Errorf("failed to unmarshal transaction response: %w", err)
 	}
 
 	transaction := result["transaction"]
-	return nil, transaction
+	return transaction, nil
 }

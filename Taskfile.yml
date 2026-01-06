@@ -1,0 +1,154 @@
+---
+# Taskfile for CypherGoat CLI
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  VERSION: '{{.CLI_VERSION | default "dev"}}'
+  COMMIT: '{{.CLI_COMMIT | default "unknown"}}'
+  DATE: '{{now | date "2006-01-02"}}'
+  BIN: 'cyphergoat'
+
+tasks:
+
+  default:
+    desc: Build the cyphergoat binary
+    cmds:
+      - task: build
+
+  build:
+    desc: Build cyphergoat binary
+    cmds:
+      - CGO_ENABLED=0 go build -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BIN}} .
+
+  build:linux:
+    desc: Build for Linux (amd64)
+    vars:
+      OS: linux
+      ARCH: amd64
+    cmds:
+      - GOOS={{.OS}} GOARCH={{.ARCH}} CGO_ENABLED=0 go build -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BIN}}-{{.OS}}-{{.ARCH}} .
+
+  build:macos:
+    desc: Build for macOS (amd64)
+    vars:
+      OS: darwin
+      ARCH: amd64
+    cmds:
+      - GOOS={{.OS}} GOARCH={{.ARCH}} CGO_ENABLED=0 go build -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BIN}}-{{.OS}}-{{.ARCH}} .
+
+  build:macos:arm64:
+    desc: Build for macOS (arm64/Apple Silicon)
+    vars:
+      OS: darwin
+      ARCH: arm64
+    cmds:
+      - GOOS={{.OS}} GOARCH={{.ARCH}} CGO_ENABLED=0 go build -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BIN}}-{{.OS}}-{{.ARCH}} .
+
+  build:windows:
+    desc: Build for Windows (amd64)
+    vars:
+      OS: windows
+      ARCH: amd64
+    cmds:
+      - GOOS={{.OS}} GOARCH={{.ARCH}} CGO_ENABLED=0 go build -ldflags "-s -w -X main.version={{.VERSION}} -X main.commit={{.COMMIT}} -X main.date={{.DATE}}" -o {{.BIN}}-{{.OS}}-{{.ARCH}}.exe .
+
+  build:all:
+    desc: Build for all platforms
+    cmds:
+      - task: build:linux
+      - task: build:macos
+      - task: build:macos:arm64
+      - task: build:windows
+
+  install:task:
+    desc: Install Task runner
+    cmds:
+      - |
+        echo "Installing Task..."
+        sh -c "$(curl -sL https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
+        echo "Add ~/.local/bin to your PATH: export PATH=\"$HOME/.local/bin:$PATH\""
+
+  install:
+    desc: Install cyphergoat to system
+    cmds:
+      - |
+        echo "Installing cyphergoat to /usr/local/bin..."
+        sudo mv {{.BIN}} /usr/local/bin/
+        echo "✅ cyphergoat installed!"
+
+  install:user:
+    desc: Install cyphergoat to user directory
+    cmds:
+      - |
+        mkdir -p ~/.local/bin
+        mv {{.BIN}} ~/.local/bin/
+        echo "✅ Installed to ~/.local/bin"
+        echo "Add to PATH: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+
+  test:
+    desc: Run all tests with race detector
+    cmds:
+      - go test ./... -v -race
+
+  test:short:
+    desc: Run tests without race detector (faster)
+    cmds:
+      - go test ./... -v
+
+  lint:
+    desc: Run linter
+    cmds:
+      - |
+        if command -v golangci-lint &> /dev/null; then
+          golangci-lint run ./...
+        else
+          echo "Install linter: curl -sSf https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin"
+          exit 1
+        fi
+
+  lint:install:
+    desc: Install golangci-lint
+    cmds:
+      - |
+        curl -sSf https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+
+  verify:
+    desc: Verify SLSA provenance (requires Cosign)
+    cmds:
+      - |
+        if ! command -v cosign &> /dev/null; then
+          echo "Installing Cosign..."
+          curl -sL https://slsa.dev/install.sh | bash -s
+        fi
+        echo "Verifying SLSA provenance..."
+        cosign verify-attestation \
+          --type slsaprovenance \
+          --policy .github/policy.json \
+          {{.BIN}} || echo "⚠️  Verification failed or attestation not found"
+
+  verify:checksum:
+    desc: Verify SHA256 checksum
+    cmds:
+      - |
+        if [ -f "{{.BIN}}.sha256" ]; then
+          sha256sum -c {{.BIN}}.sha256
+        else
+          echo "⚠️  No checksum file found"
+        fi
+
+  tidy:
+    desc: Clean up go.mod and go.sum
+    cmds:
+      - go mod tidy
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f {{.BIN}} {{.BIN}}-*-* *.exe checksums.txt *.sha256 *.sig *.cert.pem *.intoto.jsonl
+
+  clean:all:
+    desc: Clean all generated files including go.sum
+    cmds:
+      - rm -rf {{.BIN}} {{.BIN}}-*-* *.exe go.sum checksums.txt *.sha256 *.sig *.cert.pem *.intoto.jsonl

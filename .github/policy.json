@@ -1,0 +1,21 @@
+{
+  "version": "spec.culpa.org/statement/cose/v1",
+  "subjects": [
+    "cyphergoat"
+  ],
+  "conditions": [
+    {
+      "match": {
+        "subjects": {
+          "$.*.digiPredicate.predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "require": [
+        {
+          "attribute": "issuer",
+          "pattern": "https://token.actions.githubusercontent.com"
+        }
+      ]
+    }
+  ]
+}

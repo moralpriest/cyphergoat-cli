@@ -4,6 +4,7 @@ Copyright © 2025 CypherGoat <contact@cyphergoat.com>
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -25,7 +26,8 @@ var swapCmd = &cobra.Command{
 
 This command uses the CypherGoat API to make the exchange.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Define styled output helpers
+		logger := NewLogger(verbose)
+
 		titleStyle := color.New(color.FgCyan, color.Bold).SprintFunc()
 		successStyle := color.New(color.FgGreen, color.Bold).SprintFunc()
 		errorStyle := color.New(color.FgRed, color.Bold).SprintFunc()
@@ -34,7 +36,6 @@ This command uses the CypherGoat API to make the exchange.`,
 		fmt.Println(titleStyle("CypherGoat Exchange"))
 		fmt.Println()
 
-		// Collect input with survey
 		answers := struct {
 			CoinFrom    string
 			NetworkFrom string
@@ -80,7 +81,7 @@ This command uses the CypherGoat API to make the exchange.`,
 					Message: "Amount to swap:",
 					Help:    fmt.Sprintf("Amount of %s to exchange", strings.ToUpper(answers.CoinFrom)),
 				},
-				Validate: func(ans interface{}) error {
+				Validate: func(ans any) error {
 					strVal, ok := ans.(string)
 					if !ok {
 						return fmt.Errorf("invalid input")
@@ -124,16 +125,40 @@ This command uses the CypherGoat API to make the exchange.`,
 		network1 := strings.ToLower(answers.NetworkFrom)
 		network2 := strings.ToLower(answers.NetworkTo)
 
+		// Check if API key is set before making request
+		if api.GetAPIKey() == "" {
+			fmt.Println(errorStyle("Error:"), "API key is required")
+			fmt.Println()
+			fmt.Println(infoStyle("To set your API key, run one of the following:"))
+			fmt.Println("  export CYPHERGOAT_API_KEY=\"your_api_key_here\"")
+			fmt.Println()
+			fmt.Println(infoStyle("Or add it to your shell config file:"))
+			fmt.Println("  set -gx CYPHERGOAT_API_KEY \"your_api_key_here\"  # for fish shell")
+			fmt.Println()
+			fmt.Println(infoStyle("Get your API key from: https://cyphergoat.com"))
+			return
+		}
+
 		s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 		s.Suffix = " Fetching Rates from Partnered Exchanges..."
-		s.Color("cyan")
+		_ = s.Color("cyan")
 		s.Start()
 
-		estimates, err := api.FetchEstimateFromAPI(coin1, coin2, amount, false, network1, network2)
+		logger.Debug("Fetching rates for %s -> %s (amount: %f, network: %s -> %s)",
+			coin1, coin2, amount, network1, network2)
+
+		estimates, err := api.FetchEstimateFromAPI(context.Background(), coin1, coin2, amount, false, network1, network2)
 		s.Stop()
 
 		if err != nil {
-			fmt.Println(errorStyle("Error fetching rates:"), err)
+			logger.Error("Error fetching rates: %s", err)
+			if strings.Contains(err.Error(), "API key") {
+				fmt.Println()
+				fmt.Println(infoStyle("Make sure you've set your API key:"))
+				fmt.Println("  export CYPHERGOAT_API_KEY=\"your_api_key_here\"")
+				fmt.Println()
+				fmt.Println(infoStyle("Get your API key from: https://cyphergoat.com"))
+			}
 			return
 		}
 
@@ -160,7 +185,7 @@ This command uses the CypherGoat API to make the exchange.`,
 				fmt.Sprintf("%d", i+1),
 				est.ExchangeName,
 				fmt.Sprintf("%.8f %s", est.ReceiveAmount, strings.ToUpper(coin2)),
-				fmt.Sprintf("1 %s = %.8f %s", strings.ToUpper(coin1), est.ReceiveAmount/amount, strings.ToUpper(coin2)),
+				fmt.Sprintf("$%.2f USD", est.TradeValueUSD),
 			})
 		}
 		table.Render()
@@ -201,7 +226,7 @@ This command uses the CypherGoat API to make the exchange.`,
 		s.Suffix = " Processing transaction..."
 		s.Start()
 
-		err, tx := api.CreateTradeFromAPI(coin1, coin2, amount, address, selected.ExchangeName, network1, network2)
+		tx, err := api.CreateTradeFromAPI(context.Background(), coin1, coin2, amount, address, selected.ExchangeName, network1, network2)
 		s.Stop()
 
 		if err != nil {
