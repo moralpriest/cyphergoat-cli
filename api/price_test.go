@@ -22,7 +22,7 @@ func TestGetPrice_Success(t *testing.T) {
 		response := map[string]map[string]float64{
 			"bitcoin": {"usd": expectedPrice},
 		}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 
@@ -91,16 +91,17 @@ func TestGetPrice_CacheExpired(t *testing.T) {
 		ids := r.URL.Query().Get("ids")
 		response := make(map[string]map[string]float64)
 
-		if ids == "litecoin" {
+		switch ids {
+		case "litecoin":
 			response = map[string]map[string]float64{
 				"litecoin": {"usd": expectedPrice},
 			}
-		} else if ids == "bitcoin" {
+		case "bitcoin":
 			response = map[string]map[string]float64{
 				"bitcoin": {"usd": 45250.50},
 			}
 		}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 
@@ -126,7 +127,7 @@ func TestGetPrice_CacheExpired(t *testing.T) {
 func TestGetPrice_UnknownCoin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]map[string]float64{}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 
@@ -146,7 +147,7 @@ func TestGetPrice_RateLimit(t *testing.T) {
 		response := map[string]map[string]float64{
 			"sol": {"usd": 100.00},
 		}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 
@@ -155,9 +156,9 @@ func TestGetPrice_RateLimit(t *testing.T) {
 
 	ctx := context.Background()
 
-	testService.GetPrice(ctx, "sol")
-	testService.GetPrice(ctx, "sol")
-	testService.GetPrice(ctx, "sol")
+	testService.GetPrice(ctx, "sol") //nolint:errcheck
+	testService.GetPrice(ctx, "sol") //nolint:errcheck
+	testService.GetPrice(ctx, "sol") //nolint:errcheck
 
 	if callCount != 3 {
 		t.Errorf("Expected 3 API calls (no cache), got %d", callCount)
@@ -183,16 +184,17 @@ func TestGetPrices_Batch(t *testing.T) {
 		ids := r.URL.Query().Get("ids")
 		response := make(map[string]map[string]float64)
 
-		if ids == "bitcoin" {
+		switch ids {
+		case "bitcoin":
 			response = map[string]map[string]float64{
 				"bitcoin": {"usd": 45250.50},
 			}
-		} else if ids == "ethereum" {
+		case "ethereum":
 			response = map[string]map[string]float64{
 				"ethereum": {"usd": 3250.00},
 			}
 		}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 
@@ -269,7 +271,7 @@ func TestGetPrice_ConcurrentAccess(t *testing.T) {
 				"bitcoin": {"usd": 45000.00},
 			}
 		}
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(response) //nolint:errcheck
 	}))
 	defer server.Close()
 

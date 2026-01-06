@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyphergoat/cli/api"
+	"github.com/moralpriest/cyphergoat-cli/api"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/briandowns/spinner"
