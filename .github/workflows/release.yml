@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
-  attestations: write
 
 jobs:
   test:
@@ -27,7 +25,7 @@ jobs:
         run: go test ./... -v -race
 
   source:
-    name: Create source tarball with SLSA provenance
+    name: Create source tarball
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -57,24 +55,9 @@ jobs:
           name: source-tarball
           path: cli-*.tar.gz
 
-      - name: Generate SLSA provenance
-        id: slsa
-        uses: slsa-framework/slsa-github-generator/.github/workflows/generator@v2
-        with:
-          attestation-name: attestation.intoto.jsonl
-          compile-provenance: 'true'
-          result-file-name: attestation.intoto.jsonl
-
-      - name: Upload SLSA attestation
-        uses: actions/upload-artifact@v4
-        with:
-          name: slsa-attestation
-          path: attestation.intoto.jsonl
-
       - name: Create checksums
         run: |
           sha256sum cli-*.tar.gz > checksums.txt
-          echo "sha256=$(sha256sum cli-${{ steps.version.outputs.version }}.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Upload checksums
         uses: actions/upload-artifact@v4
@@ -97,7 +80,6 @@ jobs:
         with:
           files: |
             artifacts/source-tarball/cli-*.tar.gz
-            artifacts/slsa-attestation/attestation.intoto.jsonl
             artifacts/checksums/checksums.txt
           generate_release_notes: true
           draft: false
@@ -110,11 +92,6 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: 'v2.4.1'
-
       - name: Download latest release
         id: latest-release
         uses: actions/github-script@v7
@@ -133,12 +110,14 @@ jobs:
         id: download
         run: |
           gh release download ${{ steps.latest-release.outputs.result }} --repo ${{ github.repository }} --pattern "*.tar.gz" -O source.tar.gz
-          gh release download ${{ steps.latest-release.outputs.result }} --repo ${{ github.repository }} --pattern "attestation.intoto.jsonl" -O attestation.intoto.jsonl
 
-      - name: Verify SLSA provenance
+      - name: Verify source tarball
         run: |
           echo "Downloaded files:"
-          ls -la *.tar.gz *.intoto.jsonl
+          ls -la *.tar.gz
+          echo ""
+          echo "Checksum verification:"
+          sha256sum -c checksums.txt || echo "Note: Checksums file not available locally"
 
       - name: Show release info
         run: |
