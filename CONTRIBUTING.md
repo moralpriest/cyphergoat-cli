@@ -29,8 +29,8 @@ Thank you for your interest in contributing to CypherGoat CLI! This document pro
 
 ```bash
 # Clone the repository
-git clone https://github.com/moralpriest/cli.git
-cd cli
+git clone https://github.com/moralpriest/cyphergoat-cli.git
+cd cyphergoat-cli
 
 # Install Task if not already installed
 task install:task
@@ -45,14 +45,14 @@ task help
 
 ### 1. Fork the Repository
 
-1. Go to https://github.com/moralpriest/cli
+1. Go to https://github.com/moralpriest/cyphergoat-cli
 2. Click the "Fork" button
 3. Clone your fork:
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/cli.git
-cd cli
-git remote add upstream https://github.com/moralpriest/cli.git
+git clone https://github.com/YOUR-USERNAME/cyphergoat-cli.git
+cd cyphergoat-cli
+git remote add upstream https://github.com/moralpriest/cyphergoat-cli.git
 ```
 
 ### 2. Create a Feature Branch
@@ -238,7 +238,7 @@ git push origin feature/your-feature-name
 
 ### 3. Create Pull Request
 
-1. Go to https://github.com/moralpriest/cli
+1. Go to https://github.com/moralpriest/cyphergoat-cli
 2. Click "New Pull Request"
 3. Select your branch
 4. Fill in the PR template
