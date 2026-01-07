@@ -1,4 +1,4 @@
-name: Release Source
+name: Release
 
 on:
   push:
@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  BINARY_NAME: cyphergoat-cli
 
 jobs:
   test:
@@ -24,6 +27,70 @@ jobs:
       - name: Run tests
         run: go test ./... -v -race
 
+  build:
+    name: Build binaries
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Get version info
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          EXTENSION=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXTENSION=".exe"
+          fi
+
+          OUTPUT_NAME="${{ env.BINARY_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}${EXTENSION}"
+          MODULE="github.com/moralpriest/cyphergoat-cli/cmd"
+
+          go build -ldflags="-s -w \
+            -X ${MODULE}.version=${{ steps.version.outputs.version }} \
+            -X ${MODULE}.commit=${{ steps.version.outputs.commit }} \
+            -X ${MODULE}.date=${{ steps.version.outputs.date }}" \
+            -o "${OUTPUT_NAME}" .
+
+          echo "Built: ${OUTPUT_NAME}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ env.BINARY_NAME }}-*
+
   source:
     name: Create source tarball
     needs: test
@@ -38,88 +105,89 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/}
           echo "version=$TAG" >> $GITHUB_OUTPUT
-          echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Create source tarball
         run: |
-          git archive -o cli-${{ steps.version.outputs.version }}.tar.gz --prefix=cli-${{ steps.version.outputs.version }}/ HEAD
+          git archive -o ${{ env.BINARY_NAME }}-${{ steps.version.outputs.version }}.tar.gz \
+            --prefix=${{ env.BINARY_NAME }}-${{ steps.version.outputs.version }}/ HEAD
 
       - name: Upload source tarball
         uses: actions/upload-artifact@v4
         with:
           name: source-tarball
-          path: cli-*.tar.gz
-
-      - name: Create checksums
-        run: |
-          sha256sum cli-*.tar.gz > checksums.txt
-
-      - name: Upload checksums
-        uses: actions/upload-artifact@v4
-        with:
-          name: checksums
-          path: checksums.txt
+          path: ${{ env.BINARY_NAME }}-*.tar.gz
 
   release:
     name: Create GitHub release
-    needs: source
+    needs: [build, source]
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+
+          # Move all binaries to release folder
+          find artifacts -type f -name "${{ env.BINARY_NAME }}-*" -exec mv {} release/ \;
+
+          echo "Release assets:"
+          ls -la release/
+
+      - name: Create checksums
+        working-directory: release
+        run: |
+          sha256sum * > checksums.txt
+          echo "Checksums:"
+          cat checksums.txt
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/source-tarball/cli-*.tar.gz
-            artifacts/checksums/checksums.txt
+          files: release/*
           generate_release_notes: true
           draft: false
-          prerelease: true
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   verify:
-    name: Verify release (dry-run)
+    name: Verify release
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Download latest release
-        id: latest-release
-        uses: actions/github-script@v7
-        with:
-          result-encoding: string
-          script: |
-            const { data } = await github.rest.repos.getLatestRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            });
-            return data.tag_name;
+      - name: Get release tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Download release assets
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download artifact for verification
-        id: download
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download ${{ steps.latest-release.outputs.result }} --repo ${{ github.repository }} --pattern "*.tar.gz" -O source.tar.gz
+          gh release download ${{ steps.tag.outputs.tag }} \
+            --repo ${{ github.repository }} \
+            --dir downloaded
 
-      - name: Verify source tarball
+      - name: Verify checksums
+        working-directory: downloaded
         run: |
           echo "Downloaded files:"
-          ls -la *.tar.gz
+          ls -la
           echo ""
-          echo "Checksum verification:"
-          sha256sum -c checksums.txt || echo "Note: Checksums file not available locally"
+          echo "Verifying checksums..."
+          sha256sum -c checksums.txt
 
       - name: Show release info
-        run: |
-          echo "✅ Release created successfully"
-          echo "Tag: ${{ steps.latest-release.outputs.result }}"
-          echo ""
-          echo "Files in release:"
-          gh release view ${{ steps.latest-release.outputs.result }} --repo ${{ github.repository }} --json assets -q '.assets[].name'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Release created successfully!"
+          echo "Tag: ${{ steps.tag.outputs.tag }}"
+          echo ""
+          echo "Assets:"
+          gh release view ${{ steps.tag.outputs.tag }} \
+            --repo ${{ github.repository }} \
+            --json assets -q '.assets[].name'
