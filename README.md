@@ -40,7 +40,7 @@ This verifies the binary was built from the correct source code using GitHub Act
 
 ```bash
 # One-liner (requires Go and Task)
-curl -sL https://raw.githubusercontent.com/moralpriest/cli/main/install.sh | sh
+curl -sL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/install.sh | sh
 ```
 
 ### Build from Source (Recommended)
@@ -57,7 +57,7 @@ For maximum security, build from source:
 ```bash
 # 1. Clone the repository
 git clone https://github.com/moralpriest/cyphergoat-cli.git
-cd cli
+cd cyphergoat-cli
 
 # 2. Install Task (if not already installed)
 task install:task
