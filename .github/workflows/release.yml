@@ -160,7 +160,7 @@ jobs:
         working-directory: release
         run: |
           echo "$COSIGN_KEY" > cosign.key
-          cosign sign-blob --key cosign.key checksums.txt \
+          cosign sign-blob -y --key cosign.key checksums.txt \
             --output-signature checksums.txt.sig \
             --output-certificate checksums.txt.crt
           rm cosign.key
