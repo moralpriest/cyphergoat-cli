@@ -154,21 +154,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: 'v2.5.2'
-
-      - name: Sign checksums with Cosign
-        working-directory: release
-        run: |
-          cosign sign-blob checksums.txt --output-certificate checksums.txt.crt --output-signature checksums.txt.sig
-
-      - name: Upload signature to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ github.ref_name }} release/checksums.txt.sig --repo ${{ github.repository }}
+      # Cosign signing disabled - requires OIDC setup for CI
+      # - name: Install Cosign
+      #   uses: sigstore/cosign-installer@v3
+      #   with:
+      #     cosign-release: 'v2.5.2'
+      #
+      # - name: Sign checksums with Cosign
+      #   working-directory: release
+      #   run: |
+      #     cosign sign-blob checksums.txt --output-certificate checksums.txt.crt --output-signature checksums.txt.sig
+      #
+      # - name: Upload signature to release
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh release upload ${{ github.ref_name }} release/checksums.txt.sig --repo ${{ github.repository }}
 
   verify:
     name: Verify release
