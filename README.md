@@ -39,8 +39,20 @@ This verifies the binary was built from the correct source code using GitHub Act
 ### Quick Install
 
 ```bash
-# One-liner (requires Go and Task)
+# One-liner
 curl -sL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/install.sh | sh
+```
+
+### Verify Checksums
+
+After installation, verify the binary checksum:
+
+```bash
+# Download checksums
+curl -fsSL https://github.com/moralpriest/cyphergoat-cli/releases/download/v1/checksums.txt -o checksums.txt
+
+# Verify binary
+sha256sum -c checksums.txt --ignore-missing
 ```
 
 ### Build from Source (Recommended)
@@ -82,8 +94,8 @@ task install:user
 cyphergoat version
 
 # Should show:
-# CypherGoat CLI v1.0.0
-# Go: go1.25.5
+# CypherGoat CLI v1
+# Go: go1.25.x
 ```
 
 ## Usage
