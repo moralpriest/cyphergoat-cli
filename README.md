@@ -43,17 +43,40 @@ This verifies the binary was built from the correct source code using GitHub Act
 curl -sL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/install.sh | sh
 ```
 
-### Verify Checksums
+### Verification
 
-After installation, verify the binary checksum:
+Verify your installation using one of these methods:
+
+#### Option 1: GitHub Attestation (Easy)
+
+Requires [GitHub CLI](https://cli.github.com/):
 
 ```bash
-# Download checksums
-curl -fsSL https://github.com/moralpriest/cyphergoat-cli/releases/download/v1/checksums.txt -o checksums.txt
+# Install GitHub CLI if needed
+brew install gh  # macOS
+sudo apt install gh  # Linux
+
+# Verify the binary
+gh attestation verify /usr/local/bin/cyphergoat -R moralpriest/cyphergoat-cli
+```
+
+#### Option 2: Self-Signed Key (Cypherpunk)
+
+Requires [Cosign](https://docs.sigstore.dev/cosign/overview):
+
+```bash
+# Install Cosign
+brew install cosign  # macOS
+sudo pacman -S cosign  # Arch Linux
+
+# Download public key
+curl -fsSL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/.github/cyphergoat.pub > cyphergoat.pub
 
 # Verify binary
-sha256sum -c checksums.txt --ignore-missing
+cosign verify --key cyphergoat.pub /usr/local/bin/cyphergoat
 ```
+
+This provides cryptographic proof that the binary was signed by the project's private key.
 
 ### Build from Source (Recommended)
 

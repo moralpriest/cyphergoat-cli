@@ -6,7 +6,9 @@ on:
       - 'v*'
 
 permissions:
+  attestations: write
   contents: write
+  id-token: write
 
 env:
   BINARY_NAME: cyphergoat
@@ -143,6 +145,31 @@ jobs:
           sha256sum * > checksums.txt
           echo "Checksums:"
           cat checksums.txt
+
+      - name: Generate GitHub artifact attestation
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: 'release/cyphergoat-linux-amd64'
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign checksums with self-signed key
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        working-directory: release
+        run: |
+          echo "$COSIGN_KEY" > cosign.key
+          cosign sign-blob --key cosign.key checksums.txt \
+            --output-signature checksums.txt.sig \
+            --output-certificate checksums.txt.crt
+          rm cosign.key
+
+      - name: Upload signature to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} release/checksums.txt.sig --repo ${{ github.repository }}
 
       - name: Create release
         uses: softprops/action-gh-release@v2

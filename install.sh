@@ -41,6 +41,11 @@ if [ -w "${BIN_DIR}" ]; then
 
     echo "CypherGoat CLI has been successfully installed!"
     echo "Run '${BINARY_NAME}' to get started."
+    echo ""
+    echo "Verification (optional but recommended):"
+    echo "  Easy:  gh attestation verify \${BIN_DIR}/${BINARY_NAME} -R moralpriest/cyphergoat-cli"
+    echo "  Cypherpunk: curl -fsSL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/.github/cyphergoat.pub > cyphergoat.pub"
+    echo "              cosign verify --key cyphergoat.pub \${BIN_DIR}/${BINARY_NAME}"
 else
     echo "Elevated permissions required to install to ${BIN_DIR}"
     sudo mv "${TMP_FILE}" "${BIN_DIR}/${BINARY_NAME}"
@@ -49,4 +54,9 @@ else
 
     echo "CypherGoat CLI has been successfully installed!"
     echo "Run '${BINARY_NAME}' to get started."
+    echo ""
+    echo "Verification (optional but recommended):"
+    echo "  Easy:  gh attestation verify \${BIN_DIR}/${BINARY_NAME} -R moralpriest/cyphergoat-cli"
+    echo "  Cypherpunk: curl -fsSL https://raw.githubusercontent.com/moralpriest/cyphergoat-cli/main/.github/cyphergoat.pub > cyphergoat.pub"
+    echo "              cosign verify --key cyphergoat.pub \${BIN_DIR}/${BINARY_NAME}"
 fi
